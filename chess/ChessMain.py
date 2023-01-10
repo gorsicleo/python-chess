@@ -32,6 +32,8 @@ def main():
     clock = game.time.Clock()
     screen.fill(game.Color("white"))
     game_state = ChessEngine.Game_state()
+    valid_moves = game_state.get_valid_moves()
+    move_made = False  # flag variable for when a move is made
     load_images()
     running = True
 
@@ -43,23 +45,36 @@ def main():
         for event in game.event.get():
             if event.type == game.QUIT:
                 running = False
+                # mouse handler
             elif event.type == game.MOUSEBUTTONDOWN:  # adding event handles for mouse clicks
                 location = game.mouse.get_pos()  # (x,y) location of pointer
                 column = location[0] // SQUARE_SIZE
                 row = location[1] // SQUARE_SIZE
-                if square_selected == (row, column): # user clicked same square twice, unselect
-                    square_selected = () # deselect
-                    player_clicks = [] # clear player clicks
+                if square_selected == (row, column):  # user clicked same square twice, unselect
+                    square_selected = ()  # deselect
+                    player_clicks = []  # clear player clicks
                 else:
                     square_selected = (row, column)
-                    player_clicks.append(square_selected) # append for both 1st and 2nd clicks
-                if len(player_clicks) == 2: # after second click
+                    player_clicks.append(square_selected)  # append for both 1st and 2nd clicks
+                if len(player_clicks) == 2:  # after second click
                     move = ChessEngine.Move(player_clicks[0], player_clicks[1], game_state.board)
                     print(move.get_chess_notation())
-                    game_state.make_move(move)
-                    square_selected = () # reset user clicks
-                    player_clicks = []
-
+                    if move in valid_moves:
+                        game_state.make_move(move)
+                        move_made = True
+                        square_selected = ()  # reset user clicks
+                        player_clicks = []
+                    else:
+                        player_clicks = [square_selected] # Fix for wasted click when my second click was on my piece
+            # key handlers
+            elif event.type == game.KEYDOWN:
+                if event.key == game.K_z:  # undo when 'z' is pressed
+                    game_state.undo_move()
+                    move_made = True
+        # Since generating valid moves is expensive, generating is only done after a valid move!
+        if move_made:
+            valid_moves = game_state.get_valid_moves()
+            move_made = False
         draw_game_state(screen, game_state)
         clock.tick(MAX_FPS)
         game.display.flip()
