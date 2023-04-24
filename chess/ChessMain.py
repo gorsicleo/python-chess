@@ -59,13 +59,15 @@ def main():
                 if len(player_clicks) == 2:  # after second click
                     move = ChessEngine.Move(player_clicks[0], player_clicks[1], game_state.board)
                     print(move.get_chess_notation())
-                    if move in valid_moves:
-                        game_state.make_move(move)
-                        move_made = True
-                        square_selected = ()  # reset user clicks
-                        player_clicks = []
-                    else:
-                        player_clicks = [square_selected] # Fix for wasted click when my second click was on my piece
+                    for i in range(len(valid_moves)):
+
+                        if move == valid_moves[i]:
+                            game_state.make_move(valid_moves[i])
+                            move_made = True
+                            square_selected = ()  # reset user clicks
+                            player_clicks = []
+                    if not move_made:
+                        player_clicks = [square_selected]  # Fix for wasted click when my second click was on my piece
             # key handlers
             elif event.type == game.KEYDOWN:
                 if event.key == game.K_z:  # undo when 'z' is pressed

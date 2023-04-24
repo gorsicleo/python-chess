@@ -29,13 +29,25 @@ class Move:
         v: k for k, v in files_to_columns.items()  # reversing a dictionary
     }
 
-    def __init__(self, start_position, end_position, board):
+    def __init__(self, start_position, end_position, board, enpassant_possible=False):
         self.start_row = start_position[0]
         self.start_column = start_position[1]
         self.end_row = end_position[0]
         self.end_column = end_position[1]
         self.piece_moved = board[self.start_row][self.start_column]
         self.piece_captured = board[self.end_row][self.end_column]
+        #  pawn promotion
+        self.is_pawn_promotion = False
+        if (self.piece_moved == "wp" and self.end_row == 0) or (self.piece_moved == "bp" and self.end_row == 7):
+            self.is_pawn_promotion = True
+
+        #  en passant
+        self.is_enpassant_move = enpassant_possible
+        # if self.piece_moved[1] == "p" and (self.end_row, self.end_column) == enpassant_possible:
+        #    self.is_enpassant_move = True
+        if self.is_enpassant_move:
+            self.piece_captured = "wp" if self.piece_moved == "bp" else "bp"
+
         self.moveID = self.start_row * 1000 + self.start_column * 100 + self.end_row * 10 + self.end_column
 
     def get_chess_notation(self):
@@ -85,6 +97,14 @@ class Game_state:
         self.white_to_move = True
         self.game_log = []
 
+        # Check for pinned pieces, for simplicity and efficiency king position is tracked
+        self.white_king_location = (7, 4)
+        self.black_king_location = (0, 4)
+
+        self.check_mate = False
+        self.stale_mate = False
+        self.enpassant_possible = ()  # coordinates for the sqare where en passant capture is possible
+
     """
     Takes a Move as parameter and executes it (this will not work for castling, pawn promotion, en-passant)
     """
@@ -94,6 +114,27 @@ class Game_state:
         self.board[move.end_row][move.end_column] = move.piece_moved
         self.game_log.append(move)  # logs moves for undoing or history
         self.white_to_move = not self.white_to_move
+        # update kings locations
+        if move.piece_moved == "wK":
+            self.white_king_location = (move.end_row, move.end_column)
+        if move.piece_moved == "bK":
+            self.black_king_location = (move.end_row, move.end_column)
+
+        # pawn promotion
+        if move.is_pawn_promotion:
+            # NOTE: Here is not the best place to ask user for piece selection because of legal move generation(check
+            # for checks)
+            self.board[move.end_row][move.end_column] = move.piece_moved[0] + "Q"
+
+        # en passant
+        if move.is_enpassant_move:
+            self.board[move.start_row][move.end_column] = "--"  # capturing the pawn
+
+        # update en passant possible variable
+        if move.piece_moved[1] == "p" and abs(move.start_row - move.end_row) == 2:  # only on 2 square advance
+            self.enpassant_possible = ((move.start_row + move.end_row) // 2, move.start_column)
+        else:
+            self.enpassant_possible = ()
 
     """
     Undo the last move
@@ -105,6 +146,20 @@ class Game_state:
             self.board[move.start_row][move.start_column] = move.piece_moved
             self.board[move.end_row][move.end_column] = move.piece_captured
             self.white_to_move = not self.white_to_move  # switch turns back
+            # update kings locations
+            if move.piece_moved == "wK":
+                self.white_king_location = (move.start_row, move.start_column)
+            if move.piece_moved == "bK":
+                self.black_king_location = (move.start_row, move.start_column)
+
+            # undo en passant move
+            if move.is_enpassant_move:
+                self.board[move.end_row][move.end_column] = "--"
+                self.board[move.start_row][move.end_column] = move.piece_captured
+                self.enpassant_possible = (move.end_row, move.end_column)
+            # undo a 2 pawn square advance
+            if move.piece_moved[1] == "p" and abs(move.start_row - move.end_row) == 2:
+                self.enpassant_possible = ()
 
     """
     All moves considering checks.
@@ -119,7 +174,63 @@ class Game_state:
     """
 
     def get_valid_moves(self):
-        return self.get_all_possible_moves()  # for now we will not worry about checks
+        # Naive algorithm (very inefficient)
+
+        # Since generating moves changes en_passant_possible variable
+        # it is crucial to save its state and return it back after move generation
+        temp_enpassant_possible = self.enpassant_possible
+        # Generate all possible moves
+        moves = self.get_all_possible_moves()
+
+        # For each move, make a move
+        # We will be removing items from list, to avoid bugs (because indices will shift) we iterate on reverse order
+        for i in range(len(moves) - 1, -1, -1):
+            self.make_move(moves[i])
+
+            # Generate all of my opponents moves, and for each check if they can attack your king
+            self.white_to_move = not self.white_to_move  # make_move() method switches turns internally!
+            if self.in_check():
+                # If here we are in check this is not a valid move! We need to remove it from valid moves
+                moves.remove(moves[i])
+            self.white_to_move = not self.white_to_move
+            self.undo_move()
+
+        # Check for checkmate or stalemate (if there are no valid moves)
+        if len(moves) == 0:
+            if self.in_check():
+                self.check_mate = True
+            else:
+                self.stale_mate = True
+        else:
+            self.check_mate = False
+            self.stale_mate = False
+
+        self.enpassant_possible = temp_enpassant_possible  # return saved state
+        return moves
+
+    """
+    Determines if current player is in check
+    """
+
+    def in_check(self):
+        if self.white_to_move:
+            return self.square_under_attack(self.white_king_location[0], self.white_king_location[1])
+        else:
+            return self.square_under_attack(self.black_king_location[0], self.black_king_location[1])
+
+    """
+    Determines if the enemy can attack the square at position (row, column)
+    """
+
+    def square_under_attack(self, row, column) -> bool:
+        # Switch to the opponent turn to see its perspective (opponents moves)
+        self.white_to_move = not self.white_to_move
+        opponent_moves = self.get_all_possible_moves()
+        self.white_to_move = not self.white_to_move  # Switch turns back
+        for move in opponent_moves:
+            if move.end_row == row and move.end_column == column:  # square is under attack
+                return True
+        return False
 
     """
     All moves without considering checks
@@ -150,9 +261,13 @@ class Game_state:
                 # it is diagonal move (left capture)
                 if self.board[row - 1][column - 1][0] == 'b':  # There is piece of opposite color to capture
                     moves.append(Move((row, column), (row - 1, column - 1), self.board))
+                elif (row - 1, column - 1) == self.enpassant_possible:  # en passant move
+                    moves.append(Move((row, column), (row - 1, column - 1), self.board, enpassant_possible=True))
             if column + 1 <= 7:  # right capture
                 if self.board[row - 1][column + 1][0] == 'b':
                     moves.append(Move((row, column), (row - 1, column + 1), self.board))
+                elif (row - 1, column + 1) == self.enpassant_possible:  # en passant move
+                    moves.append(Move((row, column), (row - 1, column + 1), self.board, enpassant_possible=True))
         else:
             if self.board[row + 1][column] == "--":  # first square move
                 moves.append(Move((row, column), (row + 1, column), self.board))
@@ -161,9 +276,13 @@ class Game_state:
             if column - 1 >= 0:  # Left capture, see analogous explanation above
                 if self.board[row + 1][column - 1][0] == 'w':
                     moves.append(Move((row, column), (row + 1, column - 1), self.board))
+                elif (row + 1, column - 1) == self.enpassant_possible:  # en passant move
+                    moves.append(Move((row, column), (row + 1, column - 1), self.board, enpassant_possible=True))
             if column + 1 <= 7:  # right capture
                 if self.board[row + 1][column + 1][0] == 'w':
                     moves.append(Move((row, column), (row + 1, column + 1), self.board))
+                elif (row + 1, column + 1) == self.enpassant_possible:  # en passant move
+                    moves.append(Move((row, column), (row + 1, column + 1), self.board, enpassant_possible=True))
             # TODO: Pawn promotion!
 
     """
@@ -254,4 +373,3 @@ class Game_state:
                 # King can capture enemy piece or move to the empty square
                 if end_piece[0] == enemy_color or end_piece == "--":
                     moves.append(Move((row, column), (end_row, end_column), self.board))
-
