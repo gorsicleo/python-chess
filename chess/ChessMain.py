@@ -43,7 +43,7 @@ def main():
     # [(row_start, column_start), (row_end,column_end)]
     game_over = False
     player_one = True  # If a human is playing white, this will be true. If AI is playing then it will be false
-    player_two = True  # same as above! TODO: change to int to express difficulty
+    player_two = False  # TODO: change to int to express difficulty
     while running:
         human_turn = (game_state.white_to_move and player_one) or (not game_state.white_to_move and player_two)
         for event in game.event.get():

@@ -197,8 +197,11 @@ class Game_state:
 
             # undo castling rights
             self.castle_rights_log.pop()  # get rid of the new castle rights from the move we are undoing
-            castle_rights = self.castle_rights_log[-1]
-            self.current_castling_rights = castle_rights  # set the current castle rights to the last one in the list
+
+            self.current_castling_rights = CastleRights(self.castle_rights_log[-1].white_king_side,
+                                                      self.castle_rights_log[-1].black_king_side,
+                                                      self.castle_rights_log[-1].white_queen_side,
+                                                      self.castle_rights_log[-1].black_queen_side)  # set the current castle rights to the last one in the list
 
             # undo castle move
             if move.is_castle_move:
@@ -286,6 +289,10 @@ class Game_state:
 
         self.enpassant_possible = temp_enpassant_possible  # return saved state
         self.current_castling_rights = temp_castle_rights
+        self.castle_rights_log[-1] = CastleRights(self.current_castling_rights.white_king_side,
+                                          self.current_castling_rights.black_king_side,
+                                          self.current_castling_rights.white_queen_side,
+                                          self.current_castling_rights.black_queen_side)
         return moves
 
     """
