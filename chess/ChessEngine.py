@@ -78,6 +78,7 @@ class Move:
         if self.is_capture:
             move_string += 'x'
             return move_string + end_square
+        return end_square
 
     def __eq__(self, other):
         if isinstance(other, Move):
@@ -179,7 +180,7 @@ class Game_state:
                 self.board[move.end_row][move.end_column + 1] = "--" # erase the old rook
             else:  # queen side castle
                 self.board[move.end_row][move.end_column + 1] = self.board[move.end_row][move.end_column - 2] # copies the rook in new square
-                self.board[move.end_column][move.end_column - 2] = "--" # erase the old rook
+                self.board[move.end_row][move.end_column - 2] = "--" # erase the old rook
 
         # en passant log
         self.enpassant_possible_log.append(self.enpassant_possible)

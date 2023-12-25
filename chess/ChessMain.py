@@ -2,8 +2,11 @@
 This is main driver. Contains current game state in GameState object.
 It is responsible for handling user input current state.
 """
+from os import environ
+environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 import pygame as game
+from multiprocessing import Process, Queue
 from chess import ChessEngine, ChessAIEngine
 
 # Globals
@@ -46,7 +49,10 @@ def main():
     # [(row_start, column_start), (row_end,column_end)]
     game_over = False
     player_one = True  # If a human is playing white, this will be true. If AI is playing then it will be false
-    player_two = True  # TODO: change to int to express difficulty
+    player_two = False  # TODO: change to int to express difficulty
+    AI_thinking = False
+    move_finder_process = None
+    move_undone = False
     while running:
         human_turn = (game_state.white_to_move and player_one) or (not game_state.white_to_move and player_two)
         for event in game.event.get():
@@ -84,6 +90,10 @@ def main():
                     move_made = True
                     animate = False
                     game_over = False
+                    if AI_thinking:
+                        move_finder_process.terminate()
+                        AI_thinking = False
+                    move_undone = True
                 if event.key == game.K_r:  # reset when 'r' is pressed
                     game_state = ChessEngine.Game_state()
                     valid_moves = game_state.get_valid_moves()
@@ -92,15 +102,28 @@ def main():
                     move_made = False
                     animate = False
                     game_over = False
+                    if AI_thinking:
+                        move_finder_process.terminate()
+                        AI_thinking = False
+                    move_undone = True
 
         # AI move finder logic
-        if not game_over and not human_turn:
-            AI_move = ChessAIEngine.find_best_move(game_state, valid_moves)
-            if AI_move is None:
-                AI_move = ChessAIEngine.find_random_move(valid_moves)
-            game_state.make_move(AI_move)
-            move_made = True
-            animate = True
+        if not game_over and not human_turn and not move_undone:
+            if not AI_thinking:
+                AI_thinking = True
+                print("Status: Thinking...")
+                return_queue = Queue() # Used to pass data between threads
+                move_finder_process = Process(target=ChessAIEngine.find_best_move, args=(game_state, valid_moves, return_queue))
+                move_finder_process.start() # Calls find_best_move with parameters
+            if not move_finder_process.is_alive():
+                print("Status: Done Thinking...")
+                AI_move = return_queue.get()
+                if AI_move is None:
+                    AI_move = ChessAIEngine.find_random_move(valid_moves)
+                game_state.make_move(AI_move)
+                move_made = True
+                animate = True
+                AI_thinking = False
 
         # Since generating valid moves is expensive, generating is only done after a valid move!
         if move_made:
@@ -109,6 +132,7 @@ def main():
             valid_moves = game_state.get_valid_moves()
             move_made = False
             animate = False
+            move_undone = False
         draw_game_state(screen, game_state, valid_moves, square_selected, default_move_log_font)
 
         if game_state.check_mate or game_state.stale_mate:
@@ -179,13 +203,6 @@ def draw_move_log(screen, game_state, font):
         text_loc = move_log_rect.move(padding, text_y)
         screen.blit(text_object, text_loc)
         text_y += text_object.get_height()
-
-
-
-    #text_object = font.render(text, 0, game.Color("Black"))
-    #text_loc = game.Rect(0, 0, WIDTH, HEIGHT).move(WIDTH / 2 - text_object.get_width() / 2,
-     #                                              HEIGHT / 2 - text_object.get_height() / 2)
-    #screen.blit(text_object, text_loc)
 
 """
 Draws squares on the board. Top-left square is light (no matter of perspective!)
