@@ -42,8 +42,8 @@ def main():
     player_clicks = []  # keeps track of player clicks, contains two tuples
     # [(row_start, column_start), (row_end,column_end)]
     game_over = False
-    player_one = False  # If a human is playing white, this will be true. If AI is playing then it will be false
-    player_two = False  # TODO: change to int to express difficulty
+    player_one = True  # If a human is playing white, this will be true. If AI is playing then it will be false
+    player_two = True  # TODO: change to int to express difficulty
     while running:
         human_turn = (game_state.white_to_move and player_one) or (not game_state.white_to_move and player_two)
         for event in game.event.get():
@@ -92,7 +92,7 @@ def main():
 
         # AI move finder logic
         if not game_over and not human_turn:
-            AI_move = ChessAIEngine.find_best_move_min_max(game_state, valid_moves)
+            AI_move = ChessAIEngine.find_best_move(game_state, valid_moves)
             if AI_move is None:
                 AI_move = ChessAIEngine.find_random_move(valid_moves)
             game_state.make_move(AI_move)
@@ -202,6 +202,10 @@ def animate_move(move, screen, board, clock):
         game.draw.rect(screen, color, end_square)
 
         if move.piece_captured != "--":
+            if move.is_enpassant_move:
+                en_passant_row = move.end_row + 1 if move.piece_captured[0] == 'b' else move.end_row - 1
+                end_square = game.Rect(move.end_column * SQUARE_SIZE, en_passant_row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE)
+
             screen.blit(IMAGES[move.piece_captured], end_square)
 
         screen.blit(IMAGES[move.piece_moved],

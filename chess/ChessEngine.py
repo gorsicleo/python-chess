@@ -81,7 +81,7 @@ It needs to determine valid moves, keep game log,
 
 
 class Game_state:
-
+    # TODO: Game state list - possible improvement
     def __init__(self):
         # Board is represented with 2D array of strings. Blank position is denoted by "--" string.
         # Regularly, position is denoted with two letters. First letter (b or w) stands for color
@@ -115,6 +115,7 @@ class Game_state:
         self.check_mate = False
         self.stale_mate = False
         self.enpassant_possible = ()  # coordinates for the square where en passant capture is possible
+        self.enpassant_possible_log = [self.enpassant_possible]
         self.current_castling_rights = CastleRights(True, True, True, True)
         self.castle_rights_log = [CastleRights(self.current_castling_rights.white_king_side,
                                                self.current_castling_rights.black_king_side,
@@ -161,6 +162,9 @@ class Game_state:
                 self.board[move.end_row][move.end_column + 1] = self.board[move.end_row][move.end_column - 2] # copies the rook in new square
                 self.board[move.end_column][move.end_column - 2] = "--" # erase the old rook
 
+        # en passant log
+        self.enpassant_possible_log.append(self.enpassant_possible)
+
         # update castling rights - whenever a king or rook move
         self.update_castle_rights(move)
         self.castle_rights_log.append(CastleRights(self.current_castling_rights.white_king_side,
@@ -190,10 +194,8 @@ class Game_state:
             if move.is_enpassant_move:
                 self.board[move.end_row][move.end_column] = "--"
                 self.board[move.start_row][move.end_column] = move.piece_captured
-                self.enpassant_possible = (move.end_row, move.end_column)
-            # undo a 2 pawn square advance
-            if move.piece_moved[1] == "p" and abs(move.start_row - move.end_row) == 2:
-                self.enpassant_possible = ()
+            self.enpassant_possible_log.pop()
+            self.enpassant_possible = self.enpassant_possible_log[-1]
 
             # undo castling rights
             self.castle_rights_log.pop()  # get rid of the new castle rights from the move we are undoing
@@ -238,6 +240,21 @@ class Game_state:
                     self.current_castling_rights.black_queen_side = False
                 elif move.start_column == 7:  # right rook
                     self.current_castling_rights.black_king_side = False
+
+        # if a rook is captured
+        if move.piece_captured == "wR":
+            if move.end_row == 7:
+                if move.end_column == 0:
+                    self.current_castling_rights.white_queen_side = False
+                elif move.end_column == 7:
+                    self.current_castling_rights.white_king_side = False
+        elif move.piece_captured == "bR":
+            if move.end_row == 0:
+                if move.end_column == 0:
+                    self.current_castling_rights.black_queen_side = False
+                elif move.end_column == 7:
+                    self.current_castling_rights.black_king_side = False
+
 
     """
     All moves considering checks.
