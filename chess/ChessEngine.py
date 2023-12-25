@@ -47,7 +47,7 @@ class Move:
         #    self.is_enpassant_move = True
         if self.is_enpassant_move:
             self.piece_captured = "wp" if self.piece_moved == "bp" else "bp"
-
+        self.is_capture = self.piece_captured != "--"
         self.moveID = self.start_row * 1000 + self.start_column * 100 + self.end_row * 10 + self.end_column
 
         # castle move
@@ -59,6 +59,25 @@ class Move:
 
     def get_rank_file(self, row, column):
         return self.columns_to_files[column] + self.rows_to_ranks[row]
+
+    def __str__(self):
+        if self.is_castle_move:
+            return "O-O" if self.end_column == 6 else "O-O-O"
+            # "O-O"  king side castle
+            # "O-O-O" queen side castle
+
+        end_square = self.get_rank_file(self.end_row, self.end_column)
+        #pawn moves
+
+        if self.piece_moved[1] == 'p':
+            if self.is_capture:
+                return self.columns_to_files[self.start_column] + "x" + end_square
+            else:
+                return end_square
+        move_string = self.piece_moved[1]
+        if self.is_capture:
+            move_string += 'x'
+            return move_string + end_square
 
     def __eq__(self, other):
         if isinstance(other, Move):
