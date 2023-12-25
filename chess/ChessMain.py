@@ -80,6 +80,7 @@ def main():
                     game_state.undo_move()
                     move_made = True
                     animate = False
+                    game_over = False
                 if event.key == game.K_r:  # reset when 'r' is pressed
                     game_state = ChessEngine.Game_state()
                     valid_moves = game_state.get_valid_moves()
